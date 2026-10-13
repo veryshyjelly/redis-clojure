@@ -29,13 +29,12 @@
 
 (defn handler
   [& args]
+  (print args)
   "TODO: Respond with output")
 
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
   ;; You can use print statements as follows for debugging, they'll be visible when running tests.
-  (println "Logs from your program will appear here!")
   ;; Uncomment the code below to pass the first stage
-  ;; (serve 6379 handler)
-  )
+  (serve 6379 handler))
