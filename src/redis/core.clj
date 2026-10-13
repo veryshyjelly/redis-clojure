@@ -10,6 +10,14 @@
   (let [writer (io/writer socket)]
     (.write writer msg)
     (.flush writer)))
+   
+(defn listen [sock handler]
+  (let [in (.getInputStream sock)
+        buf (byte-array 1024)]
+    (loop [_ nil]
+      (if (not= -1 (.read in buf))
+        (->> buf handler (send-message sock) recur)
+        (.close sock)))))
 
 (defn serve [port handler]
   (with-open [server-sock (ServerSocket. port)]
@@ -17,17 +25,14 @@
     ;; ensures that we don't run into 'Address already in use' errors
     (. server-sock (setReuseAddress true))
 
-    (with-open [sock (.accept server-sock)]
-       (let [in (.getInputStream sock)
-             buf (byte-array 1024)]
-         (loop []
-           (when (not= -1 (.read in buf))
-             (->> buf handler (send-message sock)) 
-             (recur)))))))
+    (loop []
+     (let [sock (.accept server-sock)]
+       (future (listen sock handler)))
+      (recur))))
 
 (defn handler
-  [& args]
-  (print args)
+  [body]
+  (print (String. body))
   "+PONG\r\n")
 
 (defn -main
