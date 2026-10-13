@@ -4,11 +4,6 @@
 (require '[clojure.java.io :as io])
 (import '[java.net ServerSocket])
 
-(defn receive-message
-  "Read a line of textual data from the given socket"
-  [socket]
-  (.readLine (io/reader socket)))
-
 (defn send-message
   "Send the given string message out over the given socket"
   [socket msg]
@@ -22,10 +17,13 @@
     ;; ensures that we don't run into 'Address already in use' errors
     (. server-sock (setReuseAddress true))
 
-   (with-open [sock (.accept server-sock)]
-    (let [msg-in (receive-message sock)
-          msg-out (handler msg-in)]
-      (send-message sock msg-out)))))
+    (with-open [sock (.accept server-sock)]
+       (let [in (.getInputStream sock)
+             buf (byte-array 1024)]
+         (loop []
+           (when (not= -1 (.read in buf))
+             (->> buf handler (send-message sock)) 
+             (recur)))))))
 
 (defn handler
   [& args]
