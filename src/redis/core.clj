@@ -3,6 +3,7 @@
 
 (require '[clojure.java.io :as io])
 (import '[java.net ServerSocket])
+(require '[redis.resp :as resp])
 
 (defn send-message
   "Send the given string message out over the given socket"
@@ -16,7 +17,7 @@
         buf (byte-array 1024)]
     (loop [_ nil]
       (if (not= -1 (.read in buf))
-        (->> buf handler (send-message sock) recur)
+        (->> buf resp/parse handler (send-message sock) recur)
         (.close sock)))))
 
 (defn serve [port handler]
@@ -31,8 +32,9 @@
       (recur))))
 
 (defn handler
-  [body]
-  (print (String. body))
+  [msg]
+  (print msg)
+  (flush)
   "+PONG\r\n")
 
 (defn -main
