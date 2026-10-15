@@ -1,9 +1,11 @@
 (ns redis.core
-  (:gen-class))
+  (:gen-class)
+  (:require [clojure.java.io :as io]
+            [clojure.string :as str]
+            [redis.resp :as resp]
+            [redis.commands :as cmd]))
 
-(require '[clojure.java.io :as io])
 (import '[java.net ServerSocket])
-(require '[redis.resp :as resp])
 
 (defn send-message
   "Send the given string message out over the given socket"
@@ -15,17 +17,24 @@
 (defn listen [sock handler]
   (let [in (.getInputStream sock)
         buf (byte-array 1024)]
-    (loop [_ nil]
-      (if (not= -1 (.read in buf))
-        (->> buf resp/parse handler (send-message sock) recur)
-        (.close sock)))))
+    (loop [acc (java.io.ByteArrayOutputStream.)]
+      (let [n (.read in buf)]
+        (if (= -1 n)
+          (.close sock)
+          (do (.write acc buf 0 n)
+              (let [data (.toByteArray acc)
+                    requests (try
+                               (resp/parse data)
+                               (catch clojure.lang.ExceptionInfo _ nil))]
+                (if (nil? requests) (recur acc)
+                    (do (.reset acc)
+                        (doseq [req requests]
+                          (send-message sock (handler req)))
+                        (recur acc))))))))))
 
 (defn serve [port handler]
   (with-open [server-sock (ServerSocket. port)]
-    ;; Since the tester restarts your program quite often, setting SO_REUSEADDR
-    ;; ensures that we don't run into 'Address already in use' errors
     (. server-sock (setReuseAddress true))
-
     (loop []
      (let [sock (.accept server-sock)]
        (future (listen sock handler)))
@@ -33,13 +42,13 @@
 
 (defn handler
   [msg]
-  (print msg)
-  (flush)
-  "+PONG\r\n")
+  (let [cmd (case (str/lower-case (first msg))
+              "ping" cmd/ping
+              "echo" cmd/echo)
+        response (cmd msg)]
+    (resp/encode response)))
 
 (defn -main
   "I don't do a whole lot ... yet."
-  [& args]
-  ;; You can use print statements as follows for debugging, they'll be visible when running tests.
-  ;; Uncomment the code below to pass the first stage
+  [& _args]
   (serve 6379 handler))
