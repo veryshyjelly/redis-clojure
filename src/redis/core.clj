@@ -3,13 +3,19 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [redis.resp :as resp]
-            [redis.commands :as cmd]))
+            [redis.cmd.core :as core]
+            [tick.core :as t]
+            [clojure.data.priority-map :refer [priority-map-by]]))
 
 (import '[java.net ServerSocket])
 
 (defn send-message
   "Send the given string message out over the given socket"
   [socket msg]
+  (print "[RESPONSE]: ")
+  (pr msg)
+  (println)
+  (flush)
   (let [writer (io/writer socket)]
     (.write writer msg)
     (.flush writer)))
@@ -40,15 +46,22 @@
        (future (listen sock handler)))
       (recur))))
 
+(def state (atom { :db (hash-map) :ttl (priority-map-by t/<)}))
+
 (defn handler
   [msg]
+  (println "[REQUEST]: " msg)
   (let [cmd (case (str/lower-case (first msg))
-              "ping" cmd/ping
-              "echo" cmd/echo)
-        response (cmd msg)]
+              "ping" core/ping
+              "echo" core/echo
+              "get" core/rget!
+              "set" core/rset!
+              "digest" core/digest)
+        response (try (cmd state msg)
+                      (catch Throwable e e))]
+
     (resp/encode response)))
 
 (defn -main
-  "I don't do a whole lot ... yet."
   [& _args]
   (serve 6379 handler))
