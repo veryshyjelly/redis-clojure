@@ -1,12 +1,15 @@
 {
   "course": "redis",
-  "extensions": [],
+  "extensions": [
+    "lists"
+  ],
   "completed": [
     "jm1",
     "rg2",
     "wy1",
     "zu2",
     "qq0",
-    "la7"
+    "la7",
+    "yz1"
   ]
 }

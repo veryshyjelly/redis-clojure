@@ -16,3 +16,4 @@ deps/
 .lsp/
 .calva/
 .clj-kondo/
+cache/

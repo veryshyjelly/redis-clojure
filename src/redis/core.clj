@@ -3,7 +3,8 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [redis.resp :as resp]
-            [redis.cmd.core :as core]
+            [redis.cmd.connection :as rconn]
+            [redis.cmd.string :as rstr]
             [tick.core :as t]
             [clojure.data.priority-map :refer [priority-map-by]]))
 
@@ -46,17 +47,18 @@
        (future (listen sock handler)))
       (recur))))
 
-(def state (atom { :db (hash-map) :ttl (priority-map-by t/<)}))
+(def state (atom {:db (hash-map) :ttl (priority-map-by t/<)}))
 
 (defn handler
   [msg]
   (println "[REQUEST]: " msg)
   (let [cmd (case (str/lower-case (first msg))
-              "ping" core/ping
-              "echo" core/echo
-              "get" core/rget!
-              "set" core/rset!
-              "digest" core/digest)
+              "ping" rconn/ping
+              "echo" rconn/echo
+              "digest" rstr/digest!
+              "get" rstr/get!
+              "set" rstr/set!
+              "append" rstr/append!)
         response (try (cmd state msg)
                       (catch Throwable e e))]
 
