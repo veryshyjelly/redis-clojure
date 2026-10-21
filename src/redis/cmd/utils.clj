@@ -37,5 +37,7 @@
         (recur (-> @state :ttl peek))))))
 
 (defn get-abs-idx [idx n]
-  (if (neg? idx)
-    (-> idx (+ n) (mod n)) idx))
+  (cond (= 0 n) 0
+        (and (neg? idx) (neg? (+ n idx))) 0
+        (neg? idx) (+ n idx)
+        :else (min idx (dec n))))
