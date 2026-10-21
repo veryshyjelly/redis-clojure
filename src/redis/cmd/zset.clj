@@ -1,4 +1,4 @@
-(ns redis.cmd.sorted-set)
+(ns redis.cmd.zset)
 
 (defn bzmpop!
   "BZMPOP is the blocking variant of ZMPOP.

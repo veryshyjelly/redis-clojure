@@ -1,6 +1,6 @@
 (ns redis.cmd.string
   (:require [tick.core :as t]
-            [redis.cmd.utils :refer [get-arg get-option remove-expired!]]))
+            [redis.cmd.utils :refer [get-arg get-option remove-expired! extract]]))
 
 (defn append!
   "Appends a value to the string stored at key.
@@ -19,9 +19,10 @@
   (remove-expired! state)
   (let [key (nth msg 1)
         val (nth msg 2)
-        previous-value (-> @state :db (get key))
+        previous-value (some-> @state :db (get key) (extract :str))
         val' (if previous-value (str previous-value val) val)]
-    (swap! state update :db #(assoc % key val'))))
+    (swap! state update :db #(assoc % key [:str val']))
+    (count val')))
 
 (defn decr!
   "Decrements the integer value stored at key by one.
@@ -97,7 +98,7 @@
   (assert (> 1 (count msg)) "ERR wrong number of arguments for 'digest' command")
   (remove-expired! state)
   (let [key (cond-> (second msg) string? keyword)]
-    (when-some [val (-> @state :db (get key))]
+    (when-some [val (some-> @state :db (get key) (extract :str))]
       (assert (string? val) "value present is not a string")
       (format "%X" (hash val)))))
 
@@ -116,10 +117,8 @@
    Null reply: key does not exist."
   [state msg]
   (remove-expired! state)
-  (let [key (nth msg 1)
-        val (-> @state :db (get key))]
-    (assert (or (nil? val) (string? val)) "ERR value present at key is not a string")
-    val))
+  (let [key (nth msg 1)]
+    (some-> @state :db (get key) (extract :str))))
 
 (defn getdel!
   "Gets the value of a key and then deletes it.
@@ -461,7 +460,7 @@
                      unix-time-seconds (t/instant (t/new-duration unix-time-seconds :seconds))
                      unix-time-milliseconds (t/instant (t/new-duration unix-time-milliseconds :millis)))
         keepttl? (get-option msg "keepttl")
-        previous-value (-> @state :db (get key))
+        previous-value (some-> @state :db (get key) (extract :str))
 
         response
         (cond
@@ -476,7 +475,7 @@
           (do
             (if (or keepttl? (not expiration)) nil
                 (swap! state update :ttl #(assoc % key expiration)))
-            (swap! state update :db #(assoc % key val))
+            (swap! state update :db #(assoc % key [:str val]))
             :OK))]
     (if get? (or response previous-value) response)))
 

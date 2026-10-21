@@ -1,4 +1,4 @@
-(ns redis.cmd.hyperloglog)
+(ns redis.cmd.pf)
 
 (defn pfadd!
   "Adds all the given elements to the HyperLogLog data structure stored at the specified key.

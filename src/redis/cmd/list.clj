@@ -1,4 +1,5 @@
-(ns redis.cmd.list)
+(ns redis.cmd.list
+  (:require [redis.cmd.utils :refer [remove-expired! extract]]))
 
 (defn blmove!
   "BLMOVE is the blocking variant of LMOVE.
@@ -426,11 +427,19 @@
    Null reply: if the key does not exist.
    Bulk string reply: when called without the count argument, the value of the last element.
    Array reply: when called with the count argument, a list of popped elements."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (let [key (nth msg 1)
+        cnt (nth msg 2)]
+    (when-some [previous-value (some-> @state :db (get key) (extract :list))]
+      (let [final-value (subvec previous-value 0
+                                (- (count previous-value) (or cnt 1)))]
+        (swap! state update :db #(assoc % key final-value))
+        (if cnt (subvec previous-value cnt) (peek previous-value))))))
+
 
 (defn rpoplpush!
-  "Atomically removes the last element (tail) of the list stored at source and pushes it as the first element (head) of the list stored at destination.
+  "Atomically removes the last element (tail) of the list stored at source and 
+   pushes it as the first element (head) of the list stored at destination.
    If source does not exist, nil is returned and no operation is performed.
    If source and destination are the same key, the operation is equivalent to a list rotation: the last element is moved to the front.
 
@@ -460,8 +469,14 @@
    element [element ...]: one or more values to append to the list.
 
    Integer reply: the length of the list after the push operation."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (remove-expired! state)
+  (let [key (nth msg 1)
+        elems (drop 2 msg)
+        previous-value (some-> @state :db (get key) (extract :list))
+        final-value (apply conj (or previous-value []) elems)]
+    (swap! state update :db #(assoc % key [:list final-value]))
+    (-> @state :db (get key) (extract :list) count)))
 
 (defn rpushx!
   "Inserts the specified elements at the tail of the list stored at key.
@@ -476,5 +491,13 @@
    element [element ...]: one or more values to append to the list, only if it already exists.
 
    Integer reply: the length of the list after the push operation."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (remove-expired! state)
+  (let [key (nth msg 1)
+        elems (drop 2 msg)
+        previous-value (some-> @state :db (get key) (extract :list))
+        final-value (apply conj previous-value elems)]
+    (when previous-value
+      (swap! state update :db #(assoc % key [:list final-value])))
+    (-> @state :db (get key) (extract :list) count)))
+

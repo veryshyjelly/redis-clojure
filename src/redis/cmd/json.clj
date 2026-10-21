@@ -558,3 +558,22 @@
    With .-based path argument: Array reply of bulk string replies representing the type of the matching value."
   [_state _msg]
   (throw (Exception. "Not Implemented")))
+
+(defn json-numpowby!
+  "Raises the number value stored at path to the power of value.
+   If the key does not exist, or if the result is out of range, a simple error is returned.
+   If the matching value at a given path is not a number, that element in the reply is null.
+   If no path matches, the returned array is empty.
+
+   ```
+   JSON.NUMPOWBY key path value
+   ```
+
+   key: the key to modify.
+   path: the JSONPath to specify.
+   value: the number value to use as the exponent.
+
+   Simple error reply if the key does not exist or the result is out of range.
+   Array reply with one element per matching path: an integer reply or double reply containing the new value, or a null reply if the matching value is not a number. The array is empty if no path matches."
+  [_state _msg]
+  (throw (Exception. "Not Implemented")))

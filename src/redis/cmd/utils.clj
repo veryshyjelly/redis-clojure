@@ -23,6 +23,11 @@
     (assert (not= res :next-element) "ERR syntax error")
     res))
 
+(defn extract
+  [[kind val] type]
+  (assert (= kind type) "WRONGTYPE Operation against a key holding the wrong kind of value")
+  val)
+
 (defn remove-expired! [state]
   (loop [top (-> @state :ttl peek)]
     (when-some [[top-key top-time] top]

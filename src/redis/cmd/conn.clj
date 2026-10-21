@@ -1,4 +1,4 @@
-(ns redis.cmd.connection)
+(ns redis.cmd.conn)
 
 (defn auth!
   "AUTH authenticates the current connection.
@@ -17,6 +17,11 @@
    username: the ACL username to authenticate as, defaults to the default user if omitted.
 
    Simple string reply: OK, or an error if the password, or username/password pair, is invalid."
+  [_state _msg]
+  (throw (Exception. "Not Implemented")))
+
+(defn client
+  "Dispatcher for client commands."
   [_state _msg]
   (throw (Exception. "Not Implemented")))
 

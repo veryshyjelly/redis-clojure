@@ -1,4 +1,4 @@
-(ns redis.cmd.time-series)
+(ns redis.cmd.ts)
 
 (defn ts-add!
   "Appends a sample to a time series identified by key.

@@ -1,12 +1,8 @@
 (ns redis.core
   (:gen-class)
   (:require [clojure.java.io :as io]
-            [clojure.string :as str]
             [redis.resp :as resp]
-            [redis.cmd.connection :as rconn]
-            [redis.cmd.string :as rstr]
-            [tick.core :as t]
-            [clojure.data.priority-map :refer [priority-map-by]]))
+            [redis.handler :refer [handler]]))
 
 (import '[java.net ServerSocket])
 
@@ -42,27 +38,9 @@
 (defn serve [port handler]
   (with-open [server-sock (ServerSocket. port)]
     (. server-sock (setReuseAddress true))
-    (loop []
+    (while true
      (let [sock (.accept server-sock)]
-       (future (listen sock handler)))
-      (recur))))
-
-(def state (atom {:db (hash-map) :ttl (priority-map-by t/<)}))
-
-(defn handler
-  [msg]
-  (println "[REQUEST]: " msg)
-  (let [cmd (case (str/lower-case (first msg))
-              "ping" rconn/ping
-              "echo" rconn/echo
-              "digest" rstr/digest!
-              "get" rstr/get!
-              "set" rstr/set!
-              "append" rstr/append!)
-        response (try (cmd state msg)
-                      (catch Throwable e e))]
-
-    (resp/encode response)))
+       (future (listen sock handler))))))
 
 (defn -main
   [& _args]

@@ -1,4 +1,4 @@
-(ns redis.cmd.geospatial)
+(ns redis.cmd.geo)
 
 (defn geoadd!
   "Adds geospatial items (longitude, latitude, member) to the specified key.
