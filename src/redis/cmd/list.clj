@@ -106,7 +106,7 @@
       ;; 1. Run a single transaction to inspect AND remove the item atomically
       (let [claimed-item
             (dosync
-             (let [lst (-> @(state :db) (get key) (extract :list))]
+             (let [lst (some-> @(state :db) (get key) (extract :list))]
                (when (seq lst)
                  ;; Item exists! Remove it and return it from the transaction
                  (let [first-item (first lst)
