@@ -35,3 +35,7 @@
         (swap! state update :ttl #(dissoc % top-key))
         (swap! state update :db #(dissoc % top-key))
         (recur (-> @state :ttl peek))))))
+
+(defn get-abs-idx [idx n]
+  (if (neg? idx)
+    (-> idx (+ n) (mod n)) idx))

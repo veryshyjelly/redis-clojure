@@ -1,5 +1,5 @@
 (ns redis.cmd.list
-  (:require [redis.cmd.utils :refer [remove-expired! extract]]))
+  (:require [redis.cmd.utils :refer [remove-expired! extract get-abs-idx]]))
 
 (defn blmove!
   "BLMOVE is the blocking variant of LMOVE.
@@ -350,8 +350,13 @@
    stop: the zero-based stop index (inclusive), negative indexes count from the tail.
 
    Array reply: a list of elements in the specified range, or an empty array if the key doesn't exist."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (let [key (nth msg 1)
+        list-val (or (some-> @state :db (get key) (extract :list)) [])
+        n (count list-val)
+        start (-> (nth msg 2) parse-long (get-abs-idx n))
+        stop (-> (nth msg 3) parse-long (get-abs-idx n))]
+    (subvec list-val start (min n (inc stop)))))
 
 (defn lrem!
   "Removes occurrences of a given element from the list stored at key.
