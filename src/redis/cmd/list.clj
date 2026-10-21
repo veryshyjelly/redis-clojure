@@ -275,8 +275,16 @@
    Null reply: if the key does not exist.
    Bulk string reply: when called without the count argument, the value of the first element.
    Array reply: when called with the count argument, a list of popped elements."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+   [state msg]
+  (let [key (nth msg 1)
+        cnt (nth msg 2 nil)]
+    (when-some [previous-value (some-> @state :db (get key) (extract :list))]
+      (let [final-value (subvec previous-value (or cnt 1))
+            n (count previous-value)]
+        (swap! state update :db #(assoc % key [:list final-value]))
+        (if cnt
+          (subvec previous-value 0 (- n cnt))
+          (first previous-value))))))
 
 (defn lpos!
   "Returns the zero-based index of matching elements inside a Redis list.
@@ -442,11 +450,11 @@
    Array reply: when called with the count argument, a list of popped elements."
   [state msg]
   (let [key (nth msg 1)
-        cnt (nth msg 2)]
+        cnt (nth msg 2 nil)]
     (when-some [previous-value (some-> @state :db (get key) (extract :list))]
       (let [final-value (subvec previous-value 0
                                 (- (count previous-value) (or cnt 1)))]
-        (swap! state update :db #(assoc % key final-value))
+        (swap! state update :db #(assoc % key [:list final-value]))
         (if cnt (subvec previous-value cnt) (peek previous-value))))))
 
 

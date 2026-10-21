@@ -35,7 +35,8 @@
                           (send-message sock (handler req)))
                         (recur acc))))))))))
 
-(defn serve [port handler]
+(defn serve [port handler] 
+  (println (str "listening at localhost:" port))
   (with-open [server-sock (ServerSocket. port)]
     (. server-sock (setReuseAddress true))
     (while true
