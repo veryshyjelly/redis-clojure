@@ -316,8 +316,14 @@
    element [element ...]: one or more values to prepend to the list.
 
    Integer reply: the length of the list after the push operation."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (remove-expired! state)
+  (let [key (nth msg 1)
+        elems (drop 2 msg)
+        previous-value (some-> @state :db (get key) (extract :list))
+        final-value (into (vec (reverse elems)) previous-value)]
+    (swap! state update :db #(assoc % key [:list final-value]))
+    (-> @state :db (get key) (extract :list) count)))
 
 (defn lpushx!
   "LPUSHX inserts one or more elements at the head of the list stored at key.
