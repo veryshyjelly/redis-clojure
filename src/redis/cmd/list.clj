@@ -277,13 +277,13 @@
    Array reply: when called with the count argument, a list of popped elements."
    [state msg]
   (let [key (nth msg 1)
-        cnt (nth msg 2 nil)]
+        cnt (when-some [c (nth msg 2 nil)] (parse-long c))]
     (when-some [previous-value (some-> @state :db (get key) (extract :list))]
-      (let [final-value (subvec previous-value (or cnt 1))
-            n (count previous-value)]
+      (let [n (count previous-value)
+            final-value (subvec previous-value (min n (or cnt 1)))]
         (swap! state update :db #(assoc % key [:list final-value]))
         (if cnt
-          (subvec previous-value 0 (- n cnt))
+          (subvec previous-value 0 (min n cnt))
           (first previous-value))))))
 
 (defn lpos!
@@ -450,13 +450,15 @@
    Array reply: when called with the count argument, a list of popped elements."
   [state msg]
   (let [key (nth msg 1)
-        cnt (nth msg 2 nil)]
+        cnt (when-some [c (nth msg 2 nil)] (parse-long c))]
     (when-some [previous-value (some-> @state :db (get key) (extract :list))]
-      (let [final-value (subvec previous-value 0
-                                (- (count previous-value) (or cnt 1)))]
+      (let [n (count previous-value)
+            m (- n (or cnt 1))
+            final-value (subvec previous-value 0 m)]
         (swap! state update :db #(assoc % key [:list final-value]))
-        (if cnt (subvec previous-value cnt) (peek previous-value))))))
-
+        (if cnt
+          (subvec previous-value m)
+          (peek previous-value))))))
 
 (defn rpoplpush!
   "Atomically removes the last element (tail) of the list stored at source and 
