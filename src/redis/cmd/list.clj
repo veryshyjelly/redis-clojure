@@ -189,8 +189,10 @@
    key: the name of the key that holds the list.
 
    Integer reply: the length of the list."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (let [key (nth msg 1)
+        list-val (some-> @state :db (get key) (extract :list))]
+    (count list-val)))
 
 (defn lmove!
   "Atomically pops an element from one end of the list at source and pushes it to one end of the list at destination.
