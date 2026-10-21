@@ -1,4 +1,4 @@
-(ns redis.cmd.vector)
+(ns redis.cmd.vectorset)
 
 (defn vadd!
   "Adds a new element into the vector set stored under key.

@@ -1,5 +1,6 @@
 (ns redis.cmd.list
-  (:require [redis.cmd.utils :refer [remove-expired! extract get-abs-idx]]))
+  (:require [redis.cmd.utils :refer [remove-expired! extract get-abs-idx]]
+            [tick.core :as t]))
 
 (defn blmove!
   "BLMOVE is the blocking variant of LMOVE.
@@ -96,8 +97,30 @@
 
    Null reply: no element could be popped and the timeout expired
    Array reply: the key from which the element was popped and the value of the popped element."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (let [key (nth msg 1)
+        seconds (parse-double (last msg))
+        timeout (cond (= seconds 0.0) (t/>> (t/now) (t/new-duration 10 :minutes))
+                      :else (t/>> (t/now) (t/new-duration (* 1000 seconds) :millis)))]
+    (loop []
+      ;; 1. Run a single transaction to inspect AND remove the item atomically
+      (let [claimed-item
+            (dosync
+             (let [lst (-> @(state :db) (get key) (extract :list))]
+               (when (seq lst)
+                 ;; Item exists! Remove it and return it from the transaction
+                 (let [first-item (first lst)
+                       remaining (subvec lst 1)]
+                   (alter (state :db) assoc key [:list remaining])
+                   first-item))))]
+        (cond
+          ;; Success: We safely popped the item
+          claimed-item [key claimed-item]
+          ;; Timeout: We ran out of time
+          (t/>= (t/now) timeout) :null-array
+          ;; Retry: Wait 5ms and check again
+          :else
+          (do (Thread/sleep 5) (recur)))))))
 
 (defn brpop!
   "BRPOP is a blocking list pop primitive that removes and returns the last element of the first non-empty list among the given keys.
@@ -191,7 +214,7 @@
    Integer reply: the length of the list."
   [state msg]
   (let [key (nth msg 1)
-        list-val (some-> @state :db (get key) (extract :list))]
+        list-val (some-> @(state :db) (get key) (extract :list))]
     (count list-val)))
 
 (defn lmove!
@@ -275,16 +298,17 @@
    Null reply: if the key does not exist.
    Bulk string reply: when called without the count argument, the value of the first element.
    Array reply: when called with the count argument, a list of popped elements."
-   [state msg]
+  [state msg]
   (let [key (nth msg 1)
         cnt (when-some [c (nth msg 2 nil)] (parse-long c))]
-    (when-some [previous-value (some-> @state :db (get key) (extract :list))]
+    (if-some [previous-value (some-> @(state :db) (get key) (extract :list))]
       (let [n (count previous-value)
             final-value (subvec previous-value (min n (or cnt 1)))]
-        (swap! state update :db #(assoc % key [:list final-value]))
+        (alter (state :db) assoc key [:list final-value])
         (if cnt
           (subvec previous-value 0 (min n cnt))
-          (first previous-value))))))
+          (first previous-value)))
+      :null-string)))
 
 (defn lpos!
   "Returns the zero-based index of matching elements inside a Redis list.
@@ -330,10 +354,10 @@
   (remove-expired! state)
   (let [key (nth msg 1)
         elems (drop 2 msg)
-        previous-value (some-> @state :db (get key) (extract :list))
+        previous-value (some-> @(state :db) (get key) (extract :list))
         final-value (into (vec (reverse elems)) previous-value)]
-    (swap! state update :db #(assoc % key [:list final-value]))
-    (-> @state :db (get key) (extract :list) count)))
+     (alter (state :db) assoc key [:list final-value])
+    (-> @(state :db) (get key) (extract :list) count)))
 
 (defn lpushx!
   "LPUSHX inserts one or more elements at the head of the list stored at key.
@@ -368,7 +392,7 @@
    Array reply: a list of elements in the specified range, or an empty array if the key doesn't exist."
   [state msg]
   (let [key (nth msg 1)
-        list-val (or (some-> @state :db (get key) (extract :list)) [])
+        list-val (or (some-> @(state :db) (get key) (extract :list)) [])
         n (count list-val)
         start (-> (nth msg 2) parse-long (get-abs-idx n))
         stop (-> (nth msg 3) parse-long (get-abs-idx n) inc (min n))]
@@ -451,11 +475,11 @@
   [state msg]
   (let [key (nth msg 1)
         cnt (when-some [c (nth msg 2 nil)] (parse-long c))]
-    (when-some [previous-value (some-> @state :db (get key) (extract :list))]
+    (when-some [previous-value (some-> @(state :db) (get key) (extract :list))]
       (let [n (count previous-value)
             m (- n (or cnt 1))
             final-value (subvec previous-value 0 m)]
-        (swap! state update :db #(assoc % key [:list final-value]))
+         (alter (state :db) assoc key [:list final-value])
         (if cnt
           (subvec previous-value m)
           (peek previous-value))))))
@@ -496,10 +520,10 @@
   (remove-expired! state)
   (let [key (nth msg 1)
         elems (drop 2 msg)
-        previous-value (some-> @state :db (get key) (extract :list))
+        previous-value (some-> @(state :db) (get key) (extract :list))
         final-value (apply conj (or previous-value []) elems)]
-    (swap! state update :db #(assoc % key [:list final-value]))
-    (-> @state :db (get key) (extract :list) count)))
+     (alter (state :db) assoc key [:list final-value])
+    (-> @(state :db) (get key) (extract :list) count)))
 
 (defn rpushx!
   "Inserts the specified elements at the tail of the list stored at key.
@@ -518,9 +542,9 @@
   (remove-expired! state)
   (let [key (nth msg 1)
         elems (drop 2 msg)
-        previous-value (some-> @state :db (get key) (extract :list))
+        previous-value (some-> @(state :db) (get key) (extract :list))
         final-value (apply conj previous-value elems)]
     (when previous-value
-      (swap! state update :db #(assoc % key [:list final-value])))
-    (-> @state :db (get key) (extract :list) count)))
+       (alter (state :db) assoc key [:list final-value]))
+    (-> @(state :db) (get key) (extract :list) count)))
 

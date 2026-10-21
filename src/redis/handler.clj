@@ -9,7 +9,8 @@
    [redis.cmd.stream :as rstream]
    [clojure.data.priority-map :refer [priority-map-by]]))
 
-(def state (atom {:db (hash-map) :ttl (priority-map-by t/<)}))
+(def state {:db (ref (hash-map))
+            :ttl (ref (priority-map-by t/<))})
 
 (defn handler
   [msg]
@@ -80,8 +81,21 @@
               "xack" rstream/xack!
               "xackdel" rstream/xackdel!
               "xadd" rstream/xadd!
-              "xautoclaim" rstream/xautoclaim!)
-        response (try (cmd state msg)
+              "xautoclaim" rstream/xautoclaim!
+              "xcfgset" rstream/xcfgset!
+              "xclaim" rstream/xclaim!
+              "xdel" rstream/xdel!
+              "xdelex" rstream/xdelex!
+              "xgroup" rstream/xgroup!
+              "xidmprecord" rstream/xidmprecord!
+              "xinfo" rstream/xinfo!
+              "xlen" rstream/xlen!
+              "xnack" rstream/xnack!
+              "xpending" rstream/xpending!
+              "xrange" rstream/xrange!
+              "xread" rstream/xread!
+              "xreadgroup" rstream/xreadgroup!)
+        response (try (dosync (cmd state msg))
                       (catch Throwable e e))]
 
     (resp/encode response)))

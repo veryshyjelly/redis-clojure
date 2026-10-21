@@ -19,9 +19,9 @@
   (remove-expired! state)
   (let [key (nth msg 1)
         val (nth msg 2)
-        previous-value (some-> @state :db (get key) (extract :str))
+        previous-value (some-> @(state :db) (get key) (extract :string))
         val' (if previous-value (str previous-value val) val)]
-    (swap! state update :db #(assoc % key [:str val']))
+    (alter (state :db) assoc key [:string val'])
     (count val')))
 
 (defn decr!
@@ -98,7 +98,7 @@
   (assert (> 1 (count msg)) "ERR wrong number of arguments for 'digest' command")
   (remove-expired! state)
   (let [key (cond-> (second msg) string? keyword)]
-    (when-some [val (some-> @state :db (get key) (extract :str))]
+    (when-some [val (some-> @(state :db) (get key) (extract :string))]
       (assert (string? val) "value present is not a string")
       (format "%X" (hash val)))))
 
@@ -118,7 +118,9 @@
   [state msg]
   (remove-expired! state)
   (let [key (nth msg 1)]
-    (some-> @state :db (get key) (extract :str))))
+    (or
+     (some-> @(state :db) (get key) (extract :string))
+     :null-string)))
 
 (defn getdel!
   "Gets the value of a key and then deletes it.
@@ -460,22 +462,22 @@
                      unix-time-seconds (t/instant (t/new-duration unix-time-seconds :seconds))
                      unix-time-milliseconds (t/instant (t/new-duration unix-time-milliseconds :millis)))
         keepttl? (get-option msg "keepttl")
-        previous-value (some-> @state :db (get key) (extract :str))
+        previous-value (some-> @(state :db) (get key) (extract :string))
 
         response
         (cond
-          (and nx? (contains? (@state :db) key)) nil
-          (and xx? ((complement contains?) (@state :db) key)) nil
-          (and ifeq-value (not= previous-value ifeq-value)) nil
-          (and ifne-value (= previous-value ifne-value)) nil
-          (and ifdeq-digest (not= (format "%X" (hash previous-value)) ifdeq-digest)) nil
-          (and ifdne-digest (= (format "%X" (hash previous-value)) ifdne-digest)) nil
+          (and nx? (contains? @(state :db) key)) :null-string
+          (and xx? ((complement contains?) @(state :db) key)) :nul-string
+          (and ifeq-value (not= previous-value ifeq-value)) :null-string
+          (and ifne-value (= previous-value ifne-value)) :null-string
+          (and ifdeq-digest (not= (format "%X" (hash previous-value)) ifdeq-digest)) :null-string
+          (and ifdne-digest (= (format "%X" (hash previous-value)) ifdne-digest)) :null-string
 
           :else
           (do
             (if (or keepttl? (not expiration)) nil
-                (swap! state update :ttl #(assoc % key expiration)))
-            (swap! state update :db #(assoc % key [:str val]))
+                (alter (state :ttl) assoc key expiration))
+            (alter (state :db) assoc key [:string val])
             :OK))]
     (if get? (or response previous-value) response)))
 

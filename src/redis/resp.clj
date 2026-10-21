@@ -73,7 +73,9 @@
 (defmethod encode-resp :map [{v :value}] (let [parts (map encode (reduce-kv conj [] v))]
                                   (str "%" (count v) "\r\n" (apply str parts))))
 (defmethod encode-resp :error [{v :value}] (str "-" (ex-message v) "\r\n"))
-(defmethod encode-resp :nil [_] "$-1\r\n")
+(defmethod encode-resp :nil [_] "_\r\n")
+(defmethod encode-resp :null-array [_] "*-1\r\n")
+(defmethod encode-resp :null-string [_] "$-1\r\n")
 
 
 (defn encode [val] 
@@ -86,6 +88,8 @@
                (vector? val) :array
                (set? val) :set
                (map? val) :map
-               (keyword? val) :key
-               (nil? val) :nil)]
+               (nil? val) :nil
+               (= val :null-array) :null-array
+               (= val :null-string) :null-string
+               (keyword? val) :key)]
     (encode-resp {:type type :value val})))

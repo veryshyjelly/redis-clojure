@@ -189,6 +189,11 @@
   [_state _msg]
   (throw (Exception. "Not Implemented")))
 
+(defn xgroup!
+  "Dispatcher for xgroup commands."
+  [_state _msg]
+  (throw (Exception. "Not Implemented")))
+
 (defn xgroup-create!
   "Creates a new consumer group for the stream stored at key.
    The group is uniquely identified by its name within that stream; attempting to create a group with a name that already exists returns a -BUSYGROUP error.
@@ -298,6 +303,11 @@
 
    Simple string reply: OK when the provided pid/iid pair already maps to the same stream ID, that is, the command is idempotent.
    Simple error reply: the key does not exist, the key does not refer to a stream, the stream ID refers to a non-existent or deleted entry, pid and/or iid are empty, or the pid/iid pair already maps to a different stream ID."
+  [_state _msg]
+  (throw (Exception. "Not Implemented")))
+
+(defn xinfo! 
+  "Dispatcher for xinfo commands"
   [_state _msg]
   (throw (Exception. "Not Implemented")))
 

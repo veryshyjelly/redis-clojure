@@ -29,12 +29,12 @@
   val)
 
 (defn remove-expired! [state]
-  (loop [top (-> @state :ttl peek)]
+  (loop [top (-> @(state :ttl) peek)]
     (when-some [[top-key top-time] top]
       (when (t/<= top-time (t/now))
-        (swap! state update :ttl #(dissoc % top-key))
-        (swap! state update :db #(dissoc % top-key))
-        (recur (-> @state :ttl peek))))))
+        (alter (state :ttl) dissoc top-key)
+        (alter (state :db) dissoc top-key)
+        (recur (peek @(state :ttl)))))))
 
 (defn get-abs-idx [idx n]
   (cond (= 0 n) 0
