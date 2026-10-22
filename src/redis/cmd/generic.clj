@@ -51,8 +51,9 @@
 
    Bulk string reply: the serialized value of the key.
    Null reply: the key does not exist."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (let [key (nth msg 1)]
+    (some-> @(state :db) (get key) second)))
 
 (defn exists!
   "Returns the number of keys that exist from the specified keys.
@@ -202,6 +203,11 @@
    Integer reply: 1 if key was moved.
    Integer reply: 0 if key was not moved."
   [_state _msg]
+  (throw (Exception. "Not Implemented")))
+
+(defn object! 
+  "Dispatcher for object commands"
+  [] 
   (throw (Exception. "Not Implemented")))
 
 (defn object-encoding!
@@ -551,7 +557,7 @@
   [_state _msg]
   (throw (Exception. "Not Implemented")))
 
-(defn type!
+(defn rtype
   "Returns the string representation of the type of the value stored at key.
    The possible types are string, list, set, zset, hash, stream, and vectorset.
    If the key does not exist, the reply is none.
@@ -563,8 +569,11 @@
    key: the name of the key.
 
    Simple string reply: the type of key, or none when key doesn't exist."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (let [key (nth msg 1)
+        [kind _] (or (@(state :db) key) [:none nil])]
+    kind))
+
 
 (defn unlink!
   "Removes the specified keys from the keyspace.

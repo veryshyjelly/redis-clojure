@@ -1,7 +1,8 @@
 {
   "course": "redis",
   "extensions": [
-    "lists"
+    "lists",
+    "streams"
   ],
   "completed": [
     "jm1",
@@ -20,6 +21,8 @@
     "fv6",
     "ef1",
     "jp1",
-    "ec3"
+    "ec3",
+    "xj7",
+    "cc3"
   ]
 }

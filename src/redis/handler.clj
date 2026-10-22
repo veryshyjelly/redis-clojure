@@ -7,6 +7,8 @@
    [redis.cmd.list :as rlist]
    [redis.cmd.string :as rstr]
    [redis.cmd.stream :as rstream]
+   [redis.cmd.generic :as gen]
+   [redis.cmd.utils :refer [remove-expired!]]
    [clojure.data.priority-map :refer [priority-map-by]]))
 
 (def state {:db (ref (hash-map))
@@ -30,11 +32,11 @@
               "decr" rstr/decr!
               "decrby" rstr/decrby!
               "delex" rstr/delex!
-              "digest" rstr/digest!
-              "get" rstr/get!
+              "digest" rstr/digest
+              "get" rstr/rget
               "getdel" rstr/getdel!
-              "getex" rstr/getex!
-              "getrange" rstr/getrange!
+              "getex" rstr/getex
+              "getrange" rstr/getrange
               "getset" rstr/getset!
               "incr" rstr/incr!
               "incrby" rstr/incrby!
@@ -94,8 +96,43 @@
               "xpending" rstream/xpending!
               "xrange" rstream/xrange!
               "xread" rstream/xread!
-              "xreadgroup" rstream/xreadgroup!)
-        response (try (dosync (cmd state msg))
+              "xreadgroup" rstream/xreadgroup!
+              "xrevrange" rstream/xrevrange!
+              "xsetid" rstream/xsetid!
+              "xtrim" rstream/xtrim!
+              ; generic commands
+              "copy" gen/copy!
+              "del" gen/del!
+              "dump" gen/dump!
+              "exists" gen/exists!
+              "expire" gen/expire!
+              "expireat" gen/expireat!
+              "expiretime" gen/expiretime!
+              "keys" gen/keys!
+              "migrate" gen/migrate!
+              "move" gen/move!
+              "object" gen/object!
+              "persist" gen/persist!
+              "pexpire" gen/pexpire!
+              "pexpireat" gen/pexpireat!
+              "pexpiretime" gen/pexpiretime!
+              "pttl" gen/pttl!
+              "randomkey" gen/randomkey!
+              "rename" gen/rename!
+              "renamenx" gen/renamenx!
+              "restore" gen/restore!
+              "scan" gen/scan!
+              "sort" gen/sort!
+              "sort-ro" gen/sort-ro!
+              "touch" gen/touch!
+              "ttl" gen/ttl!
+              "type" gen/rtype
+              "unlink" gen/unlink!
+              "wait" gen/wait!
+              "waitaof" gen/waitaof!)
+        response (try (dosync
+                       (remove-expired! state)
+                       (cmd state msg))
                       (catch Throwable e e))]
 
     (resp/encode response)))

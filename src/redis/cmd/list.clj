@@ -1,5 +1,5 @@
 (ns redis.cmd.list
-  (:require [redis.cmd.utils :refer [remove-expired! extract get-abs-idx]]
+  (:require [redis.cmd.utils :refer [extract get-abs-idx]]
             [tick.core :as t]))
 
 (defn blmove!
@@ -119,8 +119,7 @@
           ;; Timeout: We ran out of time
           (t/>= (t/now) timeout) :null-array
           ;; Retry: Wait 5ms and check again
-          :else
-          (do (Thread/sleep 5) (recur)))))))
+          :else (do (Thread/sleep 5) (recur)))))))
 
 (defn brpop!
   "BRPOP is a blocking list pop primitive that removes and returns the last element of the first non-empty list among the given keys.
@@ -351,7 +350,6 @@
 
    Integer reply: the length of the list after the push operation."
   [state msg]
-  (remove-expired! state)
   (let [key (nth msg 1)
         elems (drop 2 msg)
         previous-value (some-> @(state :db) (get key) (extract :list))
@@ -517,7 +515,6 @@
 
    Integer reply: the length of the list after the push operation."
   [state msg]
-  (remove-expired! state)
   (let [key (nth msg 1)
         elems (drop 2 msg)
         previous-value (some-> @(state :db) (get key) (extract :list))
@@ -539,7 +536,6 @@
 
    Integer reply: the length of the list after the push operation."
   [state msg]
-  (remove-expired! state)
   (let [key (nth msg 1)
         elems (drop 2 msg)
         previous-value (some-> @(state :db) (get key) (extract :list))

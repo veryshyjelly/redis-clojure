@@ -1,6 +1,7 @@
 (ns redis.cmd.string
   (:require [tick.core :as t]
-            [redis.cmd.utils :refer [get-arg get-option remove-expired! extract]]))
+            [clojure.string :as str]
+            [redis.cmd.utils :refer [get-arg get-option extract get-abs-idx]]))
 
 (defn append!
   "Appends a value to the string stored at key.
@@ -16,7 +17,6 @@
 
    Integer reply: the length of the string after the append operation."
   [state msg]
-  (remove-expired! state)
   (let [key (nth msg 1)
         val (nth msg 2)
         previous-value (some-> @(state :db) (get key) (extract :string))
@@ -37,8 +37,16 @@
    key: the name of the key.
 
    Integer reply: the value of the key after decrementing it."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (let [key (nth msg 1)
+        val (or (some-> @(state :db) (get key) (extract :string)) "0")
+        val-parsed (parse-long val)
+        final-value (do
+                      (assert val-parsed "ERR value is not an integer or out of range")
+                      (try (dec val-parsed)
+                           (catch ArithmeticException _ "Err value out of range after operation")))]
+    (alter (state :db) assoc key [:string (str final-value)])
+    final-value))
 
 (defn decrby!
   "DECRBY reduces the integer value stored at the given key by the specified decrement amount.
@@ -54,8 +62,17 @@
    decrement: the integer amount to subtract from the value.
 
    Integer reply: the value of the key after decrementing it."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (let [key (nth msg 1)
+        amount (parse-long (nth msg 2))
+        val (or (some-> @(state :db) (get key) (extract :string)) "0")
+        val-parsed (parse-long val)
+        final-value (do
+                      (assert val-parsed "ERR value is not an integer or out of range")
+                      (try (- val-parsed amount) 
+                           (catch ArithmeticException _ "Err value out of range after operation")))]
+    (alter (state :db) assoc key [:string (str final-value)])
+    final-value))
 
 (defn delex!
   "Conditionally removes the specified key based on a value or hash digest comparison.
@@ -76,10 +93,22 @@
 
    Integer reply: 0 if not deleted (the key does not exist or a specified IFEQ/IFNE/IFDEQ/IFDNE condition is false), or 1 if deleted.
    Simple error reply if the key exists but holds a value that is not a string and one of IFEQ, IFNE, IFDEQ, or IFDNE is specified."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (let [key (nth msg 1)
+        ifeq-value (get-arg msg :IFEQ)
+        ifne-value (get-arg msg :IFNE)
+        ifdeq-digest (get-arg msg :IFDEQ)
+        ifdne-digest (get-arg msg :IFDNE)]
+    (if-let [val (some-> @(state :db) (get key))] 
+        (cond
+          (and ifeq-value (not= (extract val :string) ifeq-value)) 0
+          (and ifne-value (= (extract val :string) ifne-value)) 0
+          (and ifdeq-digest (not= (format "%X" (hash (extract val :string))) ifdeq-digest)) 0
+          (and ifdne-digest (= (format "%X" (hash (extract val :string))) ifdne-digest)) 0
+          :else (do (alter (state :db) dissoc key) 1))
+        1)))
 
-(defn digest!
+(defn digest
   "Returns the hash digest of the value stored under the given key,
    encoded as a hexadecimal string.
    The key must hold a string value; if it holds any other type, a simple error is returned.
@@ -96,13 +125,12 @@
    Bulk string reply the hash digest of the value stored in the key as a hexadecimal string."
   [state msg]
   (assert (> 1 (count msg)) "ERR wrong number of arguments for 'digest' command")
-  (remove-expired! state)
   (let [key (cond-> (second msg) string? keyword)]
     (when-some [val (some-> @(state :db) (get key) (extract :string))]
       (assert (string? val) "value present is not a string")
       (format "%X" (hash val)))))
 
-(defn get!
+(defn rget
   "Retrieves the value stored at the given key.
    If the key does not exist, a nil value is returned.
    An error is returned if the value stored at the key is not a string, since GET only operates on string values.
@@ -116,7 +144,6 @@
    Bulk string reply: the value of the key.
    Null reply: key does not exist."
   [state msg]
-  (remove-expired! state)
   (let [key (nth msg 1)]
     (or
      (some-> @(state :db) (get key) (extract :string))
@@ -136,10 +163,16 @@
 
    Bulk string reply: the value of the key.
    Null reply: if the key does not exist or if the key's value type is not a string."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (let [key (nth msg 1)]
+    (if-let [val (try (some-> @(state :db) (get key) (extract :string))
+                      (catch AssertionError _ nil))]
+      (do
+        (alter @(state :db) dissoc key)
+        val)
+      :null-string)))
 
-(defn getex!
+(defn getex
   "GETEX retrieves the value stored at key and optionally sets or removes its expiration.
    It behaves like GET but is a write command because it can modify the key time to live.
    The optional expiration options are mutually exclusive; only one may be given per call.
@@ -159,10 +192,24 @@
 
    Bulk string reply: the value of key.
    Null reply: if key does not exist."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (let [key (nth msg 1)
+        seconds (some-> (get-arg msg :EX) parse-long)
+        milliseconds (some-> (get-arg msg :PX) parse-long)
+        unix-time-seconds (some-> (get-arg msg :EXAT) parse-long)
+        unix-time-milliseconds (some-> (get-arg msg :PXAT) parse-long)
+        expiration (cond
+                     seconds (t/>> (t/now) (t/new-duration seconds :seconds))
+                     milliseconds (t/>> (t/now) (t/new-duration milliseconds :millis))
+                     unix-time-seconds (t/instant (t/new-duration unix-time-seconds :seconds))
+                     unix-time-milliseconds (t/instant (t/new-duration unix-time-milliseconds :millis)))
+        val (some-> @(state :db) (get key) (extract :string))]
+    (if val
+      (do (when expiration (alter (state :ttl) assoc key expiration)) val)
+      :null-string)))
 
-(defn getrange!
+
+(defn getrange
   "Returns the substring of the string value stored at key,
    determined by the start and end offsets.
    Both offsets are inclusive.
@@ -179,8 +226,13 @@
    end: the end offset, zero-based and inclusive, a negative value counts from the end of the string.
 
    Bulk string reply: The substring of the string value stored at key, determined by the offsets start and end (both are inclusive)."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (let [key (nth msg 1)
+        val (or (some-> @(state :db) (get key) (extract :string)) "")
+        n (count val)
+        start (-> (nth msg 2) parse-long (get-abs-idx n))
+        stop (-> (nth msg 3) parse-long (get-abs-idx n) inc (min n))]
+    (str/join (subvec (vec val) start stop))))
 
 (defn getset!
   "Atomically sets key to value and returns the old value stored at key.
@@ -196,8 +248,13 @@
 
    Bulk string reply: the old value stored at the key.
    Null reply: if the key does not exist."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (let [key (nth msg 1)
+        set-val (nth msg 2)
+        val (some-> @(state :db) (get key) (extract :string))]
+    (alter (state :ttl) dissoc key)
+    (alter (state :db) assoc key [:string set-val])
+    val))
 
 (defn incr!
   "Increments the integer stored at key by one.
@@ -213,8 +270,16 @@
    key: the name of the key.
 
    Integer reply: the value of the key after the increment."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (let [key (nth msg 1)
+        val (or (some-> @(state :db) (get key) (extract :string)) "0")
+        val-parsed (parse-long val)
+        final-value (do
+                      (assert val-parsed "ERR value is not an integer or out of range")
+                      (try (inc val-parsed) 
+                           (catch ArithmeticException _ "Err value out of range after operation")))]
+    (alter (state :db) assoc key [:string (str final-value)])
+    final-value))
 
 (defn incrby!
   "Increments the integer value stored at key by the given increment.
@@ -231,8 +296,17 @@
    increment: the integer amount to add to the value.
 
    Integer reply: the value of the key after the increment."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (let [key (nth msg 1)
+        amount (parse-long (nth msg 2))
+        val (or (some-> @(state :db) (get key) (extract :string)) "0")
+        val-parsed (parse-long val)
+        final-value (do
+                      (assert val-parsed "ERR value is not an integer or out of range")
+                      (try (+ val-parsed amount)
+                           (catch ArithmeticException _ "Err value out of range after operation")))]
+    (alter (state :db) assoc key [:string (str final-value)])
+    final-value))
 
 (defn incrbyfloat!
   "Increments the floating-point number stored at key by the given increment.
@@ -252,8 +326,17 @@
    increment: the floating-point amount to add to the value, a negative value decrements the value instead.
 
    Bulk string reply: the value of the key after the increment."
-  [_state _msg]
-  (throw (Exception. "Not Implemented")))
+  [state msg]
+  (let [key (nth msg 1)
+        amount (parse-double (nth msg 2))
+        val (or (some-> @(state :db) (get key) (extract :string)) "0")
+        val-parsed (parse-double val)
+        final-value (do
+                      (assert val-parsed "ERR value is not an integer or out of range")
+                      (try (+ val-parsed amount) 
+                           (catch ArithmeticException _ "ERR value out of range after operation")))]
+    (alter (state :db) assoc key [:string (str final-value)])
+    final-value))
 
 (defn increx!
   "Increments or decrements the numeric value stored at key by the specified amount, with optional upper and lower bounds and expiration control, in a single atomic operation.
@@ -442,20 +525,19 @@
    Null reply: the key did not exist before the SET operation, whether the key was created or not.
    Bulk string reply: the previous value of the key, whether the key was set or not."
   [state msg]
-  (remove-expired! state)
   (let [key (nth msg 1)
         val (nth msg 2)
-        nx? (get-option msg "nx")
-        xx? (get-option msg "xx")
-        ifeq-value (get-arg msg "ifeq")
-        ifne-value (get-arg msg "ifne")
-        ifdeq-digest (get-arg msg "ifdeq")
-        ifdne-digest (get-arg msg "ifdne")
-        get? (get-option msg "get")
-        seconds (some-> (get-arg msg "ex") parse-long)
-        milliseconds (some-> (get-arg msg "px") parse-long)
-        unix-time-seconds (some-> (get-arg msg "exat") parse-long)
-        unix-time-milliseconds (some-> (get-arg msg "pxat") parse-long)
+        nx? (get-option msg :NX)
+        xx? (get-option msg :XX)
+        ifeq-value (get-arg msg :IFEQ)
+        ifne-value (get-arg msg :IFNE)
+        ifdeq-digest (get-arg msg :IFDEQ)
+        ifdne-digest (get-arg msg :IFDNE)
+        get? (get-option msg :GET)
+        seconds (some-> (get-arg msg :EX) parse-long)
+        milliseconds (some-> (get-arg msg :PX) parse-long)
+        unix-time-seconds (some-> (get-arg msg :EXAT) parse-long)
+        unix-time-milliseconds (some-> (get-arg msg :PXAT) parse-long)
         expiration (cond
                      seconds (t/>> (t/now) (t/new-duration seconds :seconds))
                      milliseconds (t/>> (t/now) (t/new-duration milliseconds :millis))

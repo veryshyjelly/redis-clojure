@@ -12,11 +12,12 @@
           false msg))
 
 (defn get-arg
+  "Give keyword arg in uppercase and we will find it"
   [msg arg]
   (let [res
         (reduce (fn [acc el]
                   (cond
-                    (= (str/lower-case el) (str/lower-case arg)) :next-element
+                    (= (keyword (str/upper-case el)) arg) :next-element
                     (= :next-element acc) el
                     :else acc))
                 nil msg)]
